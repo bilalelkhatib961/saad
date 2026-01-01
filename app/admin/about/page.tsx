@@ -1,0 +1,397 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import type { LocalizedText } from "@/types/localized";
+import { AdminLogoutButton } from "@/components/admin-logout-button";
+
+const emptyLocalized = { en: "", fr: "" };
+
+type AboutContent = {
+  title: LocalizedText;
+  subtitle: LocalizedText;
+  description: LocalizedText;
+  image: string;
+  pdfLink: string;
+};
+
+const defaultContent: AboutContent = {
+  title: { ...emptyLocalized },
+  subtitle: { ...emptyLocalized },
+  description: { ...emptyLocalized },
+  image: "",
+  pdfLink: "",
+};
+
+export default function AdminAboutPage() {
+  const [content, setContent] = useState<AboutContent>(defaultContent);
+  const [isLoading, setIsLoading] = useState(true);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [pdfFile, setPdfFile] = useState<File | null>(null);
+  const router = useRouter();
+
+  const imagePreview = useMemo(
+    () => (imageFile ? URL.createObjectURL(imageFile) : null),
+    [imageFile]
+  );
+  const pdfName = pdfFile?.name || null;
+
+  useEffect(() => {
+    return () => {
+      if (imagePreview) URL.revokeObjectURL(imagePreview);
+    };
+  }, [imagePreview]);
+
+  useEffect(() => {
+    const fetchContent = async () => {
+      try {
+        const response = await fetch("/api/about");
+        if (!response.ok) {
+          throw new Error("Failed to fetch about content");
+        }
+        const data = (await response.json()) as AboutContent | null;
+        if (data) {
+          setContent({
+            ...data,
+            subtitle: data.subtitle ?? { ...emptyLocalized },
+            image: data.image ?? "",
+            pdfLink: data.pdfLink ?? "",
+          });
+        }
+      } catch (error) {
+        console.error(error);
+        setStatusMessage("Failed to load about content.");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchContent();
+  }, []);
+
+  const updateField = (
+    field: keyof AboutContent,
+    locale: "en" | "fr",
+    value: string
+  ) => {
+    setContent((prev) => ({
+      ...prev,
+      [field]: {
+        ...(prev[field] as LocalizedText),
+        [locale]: value,
+      },
+    }));
+  };
+
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setStatusMessage(null);
+
+    if (!content.image && !imageFile) {
+      setStatusMessage("Please upload an image for the About page.");
+      return;
+    }
+
+    try {
+      let imageUrl = content.image;
+      let pdfUrl = content.pdfLink;
+      if (imageFile) {
+        const formData = new FormData();
+        formData.append("file", imageFile);
+        const uploadResponse = await fetch("/api/upload", {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!uploadResponse.ok) {
+          throw new Error("Failed to upload image");
+        }
+
+        const uploaded: { url: string } = await uploadResponse.json();
+        imageUrl = uploaded.url;
+      }
+
+      if (pdfFile) {
+        const pdfData = new FormData();
+        pdfData.append("file", pdfFile);
+        const uploadResponse = await fetch("/api/upload", {
+          method: "POST",
+          body: pdfData,
+        });
+
+        if (!uploadResponse.ok) {
+          throw new Error("Failed to upload PDF");
+        }
+
+        const uploaded: { url: string } = await uploadResponse.json();
+        pdfUrl = uploaded.url;
+      }
+
+      const response = await fetch("/api/about", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...content, image: imageUrl, pdfLink: pdfUrl }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to update content");
+      }
+
+      setStatusMessage("About content updated.");
+      setImageFile(null);
+      setPdfFile(null);
+      setContent((prev) => ({ ...prev, image: imageUrl, pdfLink: pdfUrl }));
+    } catch (error) {
+      console.error(error);
+      setStatusMessage("Failed to update about content.");
+    }
+  };
+
+  return (
+    <main className="mx-auto max-w-5xl px-6 py-12 text-white">
+      <h1 className="text-3xl font-semibold">Edit About Us</h1>
+      <p className="mt-2 text-sm text-gray-400">
+        Update the About page content in English and French.
+      </p>
+      <div className="mt-4 flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={() => router.push("/admin")}
+          className="rounded-lg border border-gray-500 px-4 py-2 text-xs font-semibold text-gray-200 transition-colors hover:border-gray-300 hover:text-white"
+        >
+          Edit Gallery
+        </button>
+        <button
+          type="button"
+          onClick={() => router.push("/admin/items")}
+          className="rounded-lg border border-gray-500 px-4 py-2 text-xs font-semibold text-gray-200 transition-colors hover:border-gray-300 hover:text-white"
+        >
+          View Items
+        </button>
+        <button
+          type="button"
+          onClick={() => router.push("/admin/messages")}
+          className="rounded-lg border border-gray-500 px-4 py-2 text-xs font-semibold text-gray-200 transition-colors hover:border-gray-300 hover:text-white"
+        >
+          View Messages
+        </button>
+        <AdminLogoutButton />
+      </div>
+
+      {isLoading ? (
+        <p className="mt-6 text-gray-400">Loading...</p>
+      ) : (
+        <form onSubmit={handleSubmit} className="mt-8 space-y-8">
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Title (EN)</label>
+              <input
+                value={content.title.en}
+                onChange={(event) =>
+                  updateField("title", "en", event.target.value)
+                }
+                className="w-full rounded-lg border border-gray-600 bg-[#1f1f1f] px-3 py-2 text-sm text-white"
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Title (FR)</label>
+              <input
+                value={content.title.fr}
+                onChange={(event) =>
+                  updateField("title", "fr", event.target.value)
+                }
+                className="w-full rounded-lg border border-gray-600 bg-[#1f1f1f] px-3 py-2 text-sm text-white"
+                required
+              />
+            </div>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Subtitle (EN)</label>
+              <input
+                value={content.subtitle.en}
+                onChange={(event) =>
+                  updateField("subtitle", "en", event.target.value)
+                }
+                className="w-full rounded-lg border border-gray-600 bg-[#1f1f1f] px-3 py-2 text-sm text-white"
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Subtitle (FR)</label>
+              <input
+                value={content.subtitle.fr}
+                onChange={(event) =>
+                  updateField("subtitle", "fr", event.target.value)
+                }
+                className="w-full rounded-lg border border-gray-600 bg-[#1f1f1f] px-3 py-2 text-sm text-white"
+                required
+              />
+            </div>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Description (EN)</label>
+              <textarea
+                value={content.description.en}
+                onChange={(event) =>
+                  updateField("description", "en", event.target.value)
+                }
+                rows={6}
+                className="w-full rounded-lg border border-gray-600 bg-[#1f1f1f] px-3 py-2 text-sm text-white"
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Description (FR)</label>
+              <textarea
+                value={content.description.fr}
+                onChange={(event) =>
+                  updateField("description", "fr", event.target.value)
+                }
+                rows={6}
+                className="w-full rounded-lg border border-gray-600 bg-[#1f1f1f] px-3 py-2 text-sm text-white"
+                required
+              />
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-dashed border-gray-600 bg-[#1c1c1c]/60 p-4">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-sm font-medium text-white">About Image</p>
+                <p className="text-xs text-gray-400">
+                  Main image shown on the About page.
+                </p>
+              </div>
+              <label className="cursor-pointer rounded-md bg-white px-3 py-2 text-xs font-semibold text-[#1f1f1f] transition-opacity hover:opacity-90">
+                Choose file
+                <input
+                  type="file"
+                  accept="image/*"
+                  required={!content.image}
+                  className="sr-only"
+                  onChange={(event) =>
+                    setImageFile(event.target.files?.[0] ?? null)
+                  }
+                />
+              </label>
+            </div>
+            <div className="mt-3">
+              {imagePreview ? (
+                <div className="relative w-40 overflow-hidden rounded-lg border border-gray-700 bg-[#141414]">
+                  <img
+                    src={imagePreview}
+                    alt="New upload"
+                    className="h-28 w-full object-cover"
+                  />
+                  <div className="flex items-center justify-between px-2 py-1 text-[11px] text-gray-300">
+                    <span className="truncate">{imageFile?.name ?? "New"}</span>
+                    <button
+                      type="button"
+                      onClick={() => setImageFile(null)}
+                      className="rounded-full bg-white/10 p-1 text-gray-200 transition-colors hover:bg-white/20"
+                      aria-label="Remove image"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </div>
+              ) : content.image ? (
+                <div className="relative w-40 overflow-hidden rounded-lg border border-gray-700 bg-[#141414]">
+                  <img
+                    src={content.image}
+                    alt="Current about"
+                    className="h-28 w-full object-cover"
+                  />
+                  <div className="flex items-center justify-between px-2 py-1 text-[11px] text-gray-300">
+                    <span className="truncate">Current</span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setContent((prev) => ({ ...prev, image: "" }))
+                      }
+                      className="rounded-full bg-red-500/20 p-1 text-red-100 transition-colors hover:bg-red-500/30"
+                      aria-label="Remove image"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-xs text-gray-400">No file selected.</p>
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-dashed border-gray-600 bg-[#1c1c1c]/60 p-4">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-sm font-medium text-white">PDF Upload</p>
+                <p className="text-xs text-gray-400">
+                  Upload a CV PDF for the About page button.
+                </p>
+              </div>
+              <label className="cursor-pointer rounded-md bg-white px-3 py-2 text-xs font-semibold text-[#1f1f1f] transition-opacity hover:opacity-90">
+                Choose file
+                <input
+                  type="file"
+                  accept="application/pdf"
+                  className="sr-only"
+                  onChange={(event) =>
+                    setPdfFile(event.target.files?.[0] ?? null)
+                  }
+                />
+              </label>
+            </div>
+            <div className="mt-3">
+              {pdfName ? (
+                <div className="flex items-center justify-between rounded-lg border border-gray-700 bg-[#141414] px-3 py-2 text-xs text-gray-300">
+                  <span className="truncate">{pdfName}</span>
+                  <button
+                    type="button"
+                    onClick={() => setPdfFile(null)}
+                    className="rounded-full bg-white/10 p-1 text-gray-200 transition-colors hover:bg-white/20"
+                    aria-label="Remove PDF"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ) : content.pdfLink ? (
+                <div className="flex items-center justify-between rounded-lg border border-gray-700 bg-[#141414] px-3 py-2 text-xs text-gray-300">
+                  <span className="truncate">Current PDF</span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setContent((prev) => ({ ...prev, pdfLink: "" }))
+                    }
+                    className="rounded-full bg-red-500/20 p-1 text-red-100 transition-colors hover:bg-red-500/30"
+                    aria-label="Remove PDF"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ) : (
+                <p className="text-xs text-gray-400">No file selected.</p>
+              )}
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            className="rounded-lg bg-white px-5 py-2 text-sm font-semibold text-[#1f1f1f] transition-opacity hover:opacity-90"
+          >
+            Save About Content
+          </button>
+          {statusMessage && (
+            <p className="text-sm text-gray-300">{statusMessage}</p>
+          )}
+        </form>
+      )}
+    </main>
+  );
+}
