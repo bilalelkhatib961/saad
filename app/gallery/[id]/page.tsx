@@ -59,8 +59,8 @@ export default function GalleryDetailPage() {
         />
         <div className="pointer-events-none absolute -top-24 right-10 h-56 w-56 rounded-full bg-[#2b2b2b]/60 blur-3xl" />
         <div className="pointer-events-none absolute -bottom-24 left-6 h-64 w-64 rounded-full bg-[#3b2d20]/70 blur-3xl" />
-        <div className="relative mx-auto max-w-7xl text-center">
-          <p className="text-white/70">{t("home.loading")}</p>
+        <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+          <div className="h-16 w-16 animate-spin rounded-full border-2 border-white/70 border-t-transparent" />
         </div>
       </main>
     );
