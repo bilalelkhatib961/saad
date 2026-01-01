@@ -38,7 +38,7 @@ export function Footer() {
               {t("footer.contact")}
             </Link>
             <Link
-              href="/admin"
+              href="/admin/signin"
               className="text-sm text-gray-500 transition-colors hover:text-white"
             >
               {t("footer.admin")}
