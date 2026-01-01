@@ -1,10 +1,10 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
 import type { GalleryItem } from "@/types/gallery-item";
 import { useLanguage } from "@/components/language-provider";
+import { ImageWithSpinner } from "@/components/image-with-spinner";
 
 interface GalleryCardProps {
   item: GalleryItem;
@@ -22,11 +22,12 @@ export function GalleryCard({ item }: GalleryCardProps) {
         onMouseLeave={() => setIsHovered(false)}
       >
         <div className="relative aspect-video overflow-hidden">
-          <Image
+          <ImageWithSpinner
             src={item.mainImage}
             alt={title}
             fill
             className="object-cover transition-all duration-500 group-hover:scale-120"
+            wrapperClassName="h-full w-full"
           />
         </div>
         <div className="p-5 border border-white/10 bg-white/5 text-base text-white/80 backdrop-blur-md h-full">

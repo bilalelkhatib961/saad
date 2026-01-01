@@ -1,9 +1,9 @@
 "use client";
 
-import Image from "next/image";
 import { useEffect, useState } from "react";
 import { useLanguage } from "@/components/language-provider";
 import type { LocalizedText } from "@/types/localized";
+import { ImageWithSpinner } from "@/components/image-with-spinner";
 
 export default function AboutPage() {
   const { t, getLocalizedText } = useLanguage();
@@ -93,14 +93,13 @@ export default function AboutPage() {
 
         <aside className="space-y-6">
           <div className="rounded-2xl ">
-            <div className="relative aspect-square overflow-hidden rounded-2xl">
-              <Image
-                src={content?.image || "/placeholder.svg?height=500&width=500"}
-                alt={t("about.imageAlt")}
-                fill
-                className="object-cover"
-              />
-            </div>
+            <ImageWithSpinner
+              src={content?.image || "/placeholder.svg?height=500&width=500"}
+              alt={t("about.imageAlt")}
+              fill
+              className="object-cover"
+              wrapperClassName="aspect-square overflow-hidden rounded-2xl"
+            />
           </div>
 
           <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-sm text-white/70">

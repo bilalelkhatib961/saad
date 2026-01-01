@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import type { GalleryItem } from "@/types/gallery-item";
 import { useEffect, useRef, useState } from "react";
@@ -12,6 +11,7 @@ import { useLanguage } from "@/components/language-provider";
 import "swiper/css";
 import "swiper/css/navigation";
 import { useParams } from "next/navigation";
+import { ImageWithSpinner } from "@/components/image-with-spinner";
 
 export default function GalleryDetailPage() {
   const { id } = useParams();
@@ -149,7 +149,7 @@ export default function GalleryDetailPage() {
                 allowFullScreen
               />
             ) : (
-              <Image
+              <ImageWithSpinner
                 src={media[activeIndex]?.src || "/placeholder.svg"}
                 alt={t("gallery.imageAlt")
                   .replace("{title}", title)
@@ -157,6 +157,7 @@ export default function GalleryDetailPage() {
                 fill
                 className="object-contain"
                 priority
+                wrapperClassName="h-full w-full"
               />
             )}
           </div>
@@ -209,29 +210,29 @@ export default function GalleryDetailPage() {
                         setActiveIndex(index);
                       }}
                     >
-                      <div className="relative h-28 w-full overflow-hidden rounded-xl">
-                        {item.type === "video" ? (
-                          <Image
-                            src={
-                              item.youtubeId
-                                ? `https://img.youtube.com/vi/${item.youtubeId}/hqdefault.jpg`
-                                : "/placeholder.svg"
-                            }
-                            alt={`${title} video ${index + 1}`}
-                            fill
-                            className="object-cover transition-transform duration-300 hover:scale-105"
-                          />
-                        ) : (
-                          <Image
-                            src={item.src || "/placeholder.svg"}
-                            alt={t("gallery.imageAlt")
-                              .replace("{title}", title)
-                              .replace("{index}", (index + 1).toString())}
-                            fill
-                            className="object-cover transition-transform duration-300 hover:scale-105"
-                          />
-                        )}
-                      </div>
+                      {item.type === "video" ? (
+                        <ImageWithSpinner
+                          src={
+                            item.youtubeId
+                              ? `https://img.youtube.com/vi/${item.youtubeId}/hqdefault.jpg`
+                              : "/placeholder.svg"
+                          }
+                          alt={`${title} video ${index + 1}`}
+                          fill
+                          className="object-cover transition-transform duration-300 hover:scale-105"
+                          wrapperClassName="h-28 w-full overflow-hidden rounded-xl"
+                        />
+                      ) : (
+                        <ImageWithSpinner
+                          src={item.src || "/placeholder.svg"}
+                          alt={t("gallery.imageAlt")
+                            .replace("{title}", title)
+                            .replace("{index}", (index + 1).toString())}
+                          fill
+                          className="object-cover transition-transform duration-300 hover:scale-105"
+                          wrapperClassName="h-28 w-full overflow-hidden rounded-xl"
+                        />
+                      )}
                     </div>
                   </SwiperSlide>
                 ))}
