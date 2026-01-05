@@ -58,9 +58,6 @@ export default function ContactPage() {
       <div className="relative mx-auto grid max-w-7xl gap-12 lg:grid-cols-[1.1fr_0.9fr]">
         <section className="space-y-8">
           <div className="animate-fade-in">
-            <p className="text-xs uppercase tracking-[0.3em] text-[#f2c9a0]">
-              Atelier Contact
-            </p>
             <h1 className="mt-4 font-serif text-4xl font-semibold tracking-tight text-white md:text-5xl">
               {t("contact.title")}
             </h1>
@@ -158,25 +155,17 @@ export default function ContactPage() {
                 <p className="text-xs uppercase tracking-[0.2em] text-white/50">
                   {t("contact.emailLabel")}
                 </p>
-                <p className="mt-2 text-base text-white">hello@gallery.com</p>
+                <p className="mt-2 text-base text-white">
+                  saad.houalla@gmail.com
+                </p>
               </div>
               <div className="rounded-xl border border-white/10 bg-white/5 p-4">
                 <p className="text-xs uppercase tracking-[0.2em] text-white/50">
                   {t("contact.phoneLabel")}
                 </p>
-                <p className="mt-2 text-base text-white">+1 (555) 123-4567</p>
+                <p className="mt-2 text-base text-white">+961 3 303 388</p>
               </div>
             </div>
-          </div>
-
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-sm text-white/70">
-            <p className="text-xs uppercase tracking-[0.3em] text-white/60">
-              Studio Hours
-            </p>
-            <p className="mt-3 text-base text-white">Mon — Fri · 9am — 6pm</p>
-            <p className="mt-1 text-white/60">
-              Visits by appointment. Drop a note and we will confirm a slot.
-            </p>
           </div>
         </aside>
       </div>

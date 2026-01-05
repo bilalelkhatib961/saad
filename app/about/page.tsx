@@ -65,9 +65,6 @@ export default function AboutPage() {
       <div className="relative mx-auto grid max-w-7xl gap-12 lg:grid-cols-[1.1fr_0.9fr]">
         <section className="space-y-8">
           <div className="animate-fade-in">
-            <p className="text-xs uppercase tracking-[0.3em] text-[#f2c9a0]">
-              Atelier Story
-            </p>
             <h1 className="mt-4 font-serif text-4xl font-semibold tracking-tight text-white md:text-5xl">
               {title}
             </h1>
@@ -100,19 +97,6 @@ export default function AboutPage() {
               className="object-cover"
               wrapperClassName="aspect-square overflow-hidden rounded-2xl"
             />
-          </div>
-
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-sm text-white/70">
-            <p className="text-xs uppercase tracking-[0.3em] text-white/60">
-              Studio Notes
-            </p>
-            <p className="mt-3 text-base text-white">
-              Working across visual narratives, digital craft, and immersive
-              detail.
-            </p>
-            <p className="mt-1 text-white/60">
-              Each collection is shaped with intentional texture and light.
-            </p>
           </div>
         </aside>
       </div>

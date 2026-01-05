@@ -21,11 +21,11 @@ export function Navbar() {
     <nav className="fixed w-full top-0 z-50 border-b border-white/10 bg-[#0f0f0f]/85 backdrop-blur-md">
       <div className="mx-auto flex max-w-7xl items-center justify-between py-5">
         <Link href="/" className="group flex items-baseline gap-3">
-          <span className="text-xs uppercase tracking-[0.4em] text-[#f2c9a0]">
-            Atelier
+          <span className="text-xl uppercase tracking-[0.4em] text-[#f2c9a0]">
+            Saad
           </span>
-          <span className="font-serif text-xl font-semibold text-white transition group-hover:text-white/80">
-            Saad Hwalla
+          <span className="font-serif text-xl font-black text-white transition group-hover:text-white/80 tracking-[0.4em]">
+            3D
           </span>
         </Link>
 
