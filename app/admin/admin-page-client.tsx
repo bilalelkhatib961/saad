@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { GalleryItem } from "@/types/gallery-item";
 import { AdminLogoutButton } from "@/components/admin-logout-button";
+import { RichTextEditor } from "@/components/ui/rich-text-editor";
 
 const emptyLocalized = { en: "", fr: "" };
 
@@ -368,33 +369,25 @@ export default function AdminPageClient() {
           </div>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid gap-4 grid-cols-1">
           <div className="space-y-2">
             <label className="block text-sm font-medium">
               Full Description (EN)
             </label>
-            <textarea
+            <RichTextEditor
               value={formState.fullDescription.en}
-              onChange={(event) =>
-                handleChange("fullDescription", event.target.value, "en")
-              }
-              rows={4}
-              className="w-full rounded-lg border border-gray-600 bg-[#1f1f1f] px-3 py-2 text-sm text-white"
-              required
+              onChange={(value) => handleChange("fullDescription", value, "en")}
+              placeholder="Enter full description in English..."
             />
           </div>
           <div className="space-y-2">
             <label className="block text-sm font-medium">
               Full Description (FR)
             </label>
-            <textarea
+            <RichTextEditor
               value={formState.fullDescription.fr}
-              onChange={(event) =>
-                handleChange("fullDescription", event.target.value, "fr")
-              }
-              rows={4}
-              className="w-full rounded-lg border border-gray-600 bg-[#1f1f1f] px-3 py-2 text-sm text-white"
-              required
+              onChange={(value) => handleChange("fullDescription", value, "fr")}
+              placeholder="Enter full description in French..."
             />
           </div>
         </div>
@@ -497,7 +490,8 @@ export default function AdminPageClient() {
             <div>
               <p className="text-sm font-medium text-white">YouTube Videos</p>
               <p className="text-xs text-gray-400">
-                Paste YouTube embed or share links to include videos in the carousel.
+                Paste YouTube embed or share links to include videos in the
+                carousel.
               </p>
             </div>
             <button

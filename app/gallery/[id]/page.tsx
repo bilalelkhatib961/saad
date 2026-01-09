@@ -252,9 +252,10 @@ export default function GalleryDetailPage() {
           <p className="text-sm uppercase tracking-[0.3em] text-white/50">
             About This Piece
           </p>
-          <p className="mt-4 text-base leading-relaxed text-white/75">
-            {fullDescription}
-          </p>
+          <div
+            className="mt-4 text-base leading-relaxed text-white/75 rich-text-content"
+            dangerouslySetInnerHTML={{ __html: fullDescription }}
+          />
         </div>
       </div>
 
