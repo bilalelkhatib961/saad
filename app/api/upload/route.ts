@@ -44,11 +44,14 @@ export async function POST(request: Request) {
     const isVercel = !!process.env.VERCEL;
     const blobToken = process.env.BLOB_READ_WRITE_TOKEN;
     const hasBlobToken = !!blobToken;
+    const tokenFormatValid = blobToken?.startsWith("vercel_blob_") || false;
 
     console.log("[UPLOAD] Environment check:", {
       isVercel,
       hasBlobToken,
+      tokenFormatValid,
       blobTokenLength: blobToken?.length || 0,
+      tokenPrefix: blobToken?.substring(0, 12) || "none",
       nodeEnv: process.env.NODE_ENV,
       vercelEnv: process.env.VERCEL_ENV,
     });
@@ -64,6 +67,21 @@ export async function POST(request: Request) {
             error: "Blob storage not configured",
             details:
               "BLOB_READ_WRITE_TOKEN environment variable is missing. Please configure Vercel Blob Storage in your project settings.",
+          },
+          { status: 500 }
+        );
+      }
+
+      if (!tokenFormatValid) {
+        console.error(
+          "[UPLOAD] ERROR: BLOB_READ_WRITE_TOKEN format appears invalid!"
+        );
+        return NextResponse.json(
+          {
+            error: "Invalid Blob token format",
+            details:
+              "The BLOB_READ_WRITE_TOKEN appears to be invalid. Please regenerate it from your Blob store settings in Vercel.",
+            hint: "Token should start with 'vercel_blob_'. Go to Storage → Your Blob Store → Settings → Tokens to regenerate.",
           },
           { status: 500 }
         );
