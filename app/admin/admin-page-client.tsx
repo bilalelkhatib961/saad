@@ -6,8 +6,10 @@ import type { GalleryItem } from "@/types/gallery-item";
 import { AdminLogoutButton } from "@/components/admin-logout-button";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { Spinner } from "@/components/ui/spinner";
+import { ArrowUp, ArrowDown, GripVertical } from "lucide-react";
 
 const emptyLocalized = { en: "", fr: "" };
+const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 
 export default function AdminPageClient() {
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
@@ -107,15 +109,31 @@ export default function AdminPageClient() {
     }
 
     const uploadFile = async (file: File) => {
+      // Validate file size
+      if (file.size > MAX_FILE_SIZE) {
+        throw new Error(
+          `File "${file.name}" is too large (${(
+            file.size /
+            1024 /
+            1024
+          ).toFixed(2)}MB). Maximum size is 5MB.`
+        );
+      }
+
       const formData = new FormData();
       formData.append("file", file);
       const response = await fetch("/api/upload", {
         method: "POST",
         body: formData,
       });
+
       if (!response.ok) {
-        throw new Error("Upload failed");
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(
+          errorData.details || errorData.error || "Upload failed"
+        );
       }
+
       const data: { url: string } = await response.json();
       return data.url;
     };
@@ -127,18 +145,56 @@ export default function AdminPageClient() {
       videos: videoLinks.map((link) => link.trim()).filter(Boolean),
     };
 
-    if (mainImageFile) {
-      payload.mainImage = await uploadFile(mainImageFile);
-    }
+    // Upload files sequentially to avoid timeout and memory issues
+    try {
+      if (mainImageFile) {
+        try {
+          payload.mainImage = await uploadFile(mainImageFile);
+        } catch (uploadError) {
+          throw new Error(
+            `Failed to upload main image: ${
+              uploadError instanceof Error
+                ? uploadError.message
+                : String(uploadError)
+            }`
+          );
+        }
+      }
 
-    if (additionalImageFiles.length > 0 || additionalImagesChanged) {
-      const uploadedAdditional = await Promise.all(
-        additionalImageFiles.map((file) => uploadFile(file))
+      if (additionalImageFiles.length > 0 || additionalImagesChanged) {
+        const uploadedAdditional: string[] = [];
+        for (let i = 0; i < additionalImageFiles.length; i++) {
+          const file = additionalImageFiles[i];
+          try {
+            const url = await uploadFile(file);
+            uploadedAdditional.push(url);
+            // Update status to show progress
+            setStatusMessage(
+              `Uploading images... (${i + 1}/${additionalImageFiles.length})`
+            );
+          } catch (fileError) {
+            throw new Error(
+              `Failed to upload "${file.name}": ${
+                fileError instanceof Error
+                  ? fileError.message
+                  : String(fileError)
+              }`
+            );
+          }
+        }
+        payload.additionalImages = [
+          ...existingAdditionalImages,
+          ...uploadedAdditional,
+        ];
+      }
+    } catch (uploadError) {
+      setStatusMessage(
+        uploadError instanceof Error
+          ? uploadError.message
+          : "Failed to upload files. Please check file sizes and try again."
       );
-      payload.additionalImages = [
-        ...existingAdditionalImages,
-        ...uploadedAdditional,
-      ];
+      setIsSubmitting(false);
+      return;
     }
 
     try {
@@ -220,6 +276,45 @@ export default function AdminPageClient() {
     setVideoLinks((prev) => prev.filter((_, idx) => idx !== index));
   };
 
+  // Reorder functions for additional images
+  const moveExistingImage = (fromIndex: number, toIndex: number) => {
+    setExistingAdditionalImages((prev) => {
+      const newArray = [...prev];
+      const [removed] = newArray.splice(fromIndex, 1);
+      newArray.splice(toIndex, 0, removed);
+      setAdditionalImagesChanged(true);
+      return newArray;
+    });
+  };
+
+  const movePreviewImage = (fromIndex: number, toIndex: number) => {
+    setAdditionalImageFiles((prev) => {
+      const newArray = [...prev];
+      const [removed] = newArray.splice(fromIndex, 1);
+      newArray.splice(toIndex, 0, removed);
+      return newArray;
+    });
+  };
+
+  const moveImageUp = (index: number, isExisting: boolean) => {
+    if (index === 0) return;
+    if (isExisting) {
+      moveExistingImage(index, index - 1);
+    } else {
+      movePreviewImage(index, index - 1);
+    }
+  };
+
+  const moveImageDown = (index: number, isExisting: boolean) => {
+    if (isExisting) {
+      if (index === existingAdditionalImages.length - 1) return;
+      moveExistingImage(index, index + 1);
+    } else {
+      if (index === additionalImageFiles.length - 1) return;
+      movePreviewImage(index, index + 1);
+    }
+  };
+
   const mainPreview = useMemo(
     () => (mainImageFile ? URL.createObjectURL(mainImageFile) : null),
     [mainImageFile]
@@ -243,9 +338,25 @@ export default function AdminPageClient() {
   const renderPreview = (
     previewUrl: string,
     label: string,
-    onRemove: () => void
+    onRemove: () => void,
+    index?: number,
+    totalCount?: number,
+    onMoveUp?: () => void,
+    onMoveDown?: () => void,
+    onDragStart?: (e: React.DragEvent) => void,
+    onDragOver?: (e: React.DragEvent) => void,
+    onDrop?: (e: React.DragEvent) => void,
+    draggable?: boolean
   ) => (
-    <div className="relative w-32 overflow-hidden rounded-lg border border-gray-700 bg-[#141414]">
+    <div
+      draggable={draggable}
+      onDragStart={onDragStart}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+      className={`relative w-32 overflow-hidden rounded-lg border border-gray-700 bg-[#141414] ${
+        draggable ? "cursor-move" : ""
+      }`}
+    >
       <img src={previewUrl} alt={label} className="h-24 w-full object-cover" />
       <div className="flex items-center justify-between px-2 py-1 text-[11px] text-gray-300">
         <span className="truncate">{label}</span>
@@ -258,15 +369,63 @@ export default function AdminPageClient() {
           ✕
         </button>
       </div>
+      {(onMoveUp || onMoveDown) && (
+        <div className="absolute top-1 right-1 flex flex-col gap-1">
+          {onMoveUp && index !== undefined && index > 0 && (
+            <button
+              type="button"
+              onClick={onMoveUp}
+              className="rounded bg-black/60 p-0.5 text-white hover:bg-black/80"
+              aria-label="Move up"
+            >
+              <ArrowUp className="h-3 w-3" />
+            </button>
+          )}
+          {onMoveDown &&
+            index !== undefined &&
+            totalCount !== undefined &&
+            index < totalCount - 1 && (
+              <button
+                type="button"
+                onClick={onMoveDown}
+                className="rounded bg-black/60 p-0.5 text-white hover:bg-black/80"
+                aria-label="Move down"
+              >
+                <ArrowDown className="h-3 w-3" />
+              </button>
+            )}
+        </div>
+      )}
+      {draggable && (
+        <div className="absolute top-1 left-1 rounded bg-black/60 p-0.5 text-white">
+          <GripVertical className="h-3 w-3" />
+        </div>
+      )}
     </div>
   );
 
   const renderExistingPreview = (
     previewUrl: string,
     label: string,
-    onRemove: () => void
+    onRemove: () => void,
+    index?: number,
+    totalCount?: number,
+    onMoveUp?: () => void,
+    onMoveDown?: () => void,
+    onDragStart?: (e: React.DragEvent) => void,
+    onDragOver?: (e: React.DragEvent) => void,
+    onDrop?: (e: React.DragEvent) => void,
+    draggable?: boolean
   ) => (
-    <div className="relative w-32 overflow-hidden rounded-lg border border-gray-700 bg-[#141414]">
+    <div
+      draggable={draggable}
+      onDragStart={onDragStart}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+      className={`relative w-32 overflow-hidden rounded-lg border border-gray-700 bg-[#141414] ${
+        draggable ? "cursor-move" : ""
+      }`}
+    >
       <img src={previewUrl} alt={label} className="h-24 w-full object-cover" />
       <div className="flex items-center justify-between px-2 py-1 text-[11px] text-gray-300">
         <span className="truncate">{label}</span>
@@ -279,6 +438,38 @@ export default function AdminPageClient() {
           ✕
         </button>
       </div>
+      {(onMoveUp || onMoveDown) && (
+        <div className="absolute top-1 right-1 flex flex-col gap-1">
+          {onMoveUp && index !== undefined && index > 0 && (
+            <button
+              type="button"
+              onClick={onMoveUp}
+              className="rounded bg-black/60 p-0.5 text-white hover:bg-black/80"
+              aria-label="Move up"
+            >
+              <ArrowUp className="h-3 w-3" />
+            </button>
+          )}
+          {onMoveDown &&
+            index !== undefined &&
+            totalCount !== undefined &&
+            index < totalCount - 1 && (
+              <button
+                type="button"
+                onClick={onMoveDown}
+                className="rounded bg-black/60 p-0.5 text-white hover:bg-black/80"
+                aria-label="Move down"
+              >
+                <ArrowDown className="h-3 w-3" />
+              </button>
+            )}
+        </div>
+      )}
+      {draggable && (
+        <div className="absolute top-1 left-1 rounded bg-black/60 p-0.5 text-white">
+          <GripVertical className="h-3 w-3" />
+        </div>
+      )}
     </div>
   );
 
@@ -415,9 +606,24 @@ export default function AdminPageClient() {
                   accept="image/*"
                   required={!editingId || !existingMainImage}
                   className="sr-only"
-                  onChange={(event) =>
-                    setMainImageFile(event.target.files?.[0] ?? null)
-                  }
+                  onChange={(event) => {
+                    const file = event.target.files?.[0] ?? null;
+                    if (file) {
+                      if (file.size > MAX_FILE_SIZE) {
+                        setStatusMessage(
+                          `File "${file.name}" is too large (${(
+                            file.size /
+                            1024 /
+                            1024
+                          ).toFixed(2)}MB). Maximum size is 5MB.`
+                        );
+                        event.target.value = ""; // Clear the input
+                        return;
+                      }
+                      setStatusMessage(null);
+                    }
+                    setMainImageFile(file);
+                  }}
                 />
               </label>
             </div>
@@ -444,7 +650,8 @@ export default function AdminPageClient() {
                 Additional Images
               </p>
               <p className="text-xs text-gray-400">
-                Optional gallery detail images.
+                Optional gallery detail images. Drag to reorder or use arrow
+                buttons.
               </p>
             </div>
             <label className="cursor-pointer rounded-md bg-white px-3 py-2 text-xs font-semibold text-[#1f1f1f] transition-opacity hover:opacity-90">
@@ -454,9 +661,35 @@ export default function AdminPageClient() {
                 accept="image/*"
                 multiple
                 className="sr-only"
-                onChange={(event) =>
-                  setAdditionalImageFiles(Array.from(event.target.files ?? []))
-                }
+                onChange={(event) => {
+                  const files = Array.from(event.target.files ?? []);
+                  const validFiles: File[] = [];
+                  const invalidFiles: string[] = [];
+
+                  files.forEach((file) => {
+                    if (file.size > MAX_FILE_SIZE) {
+                      invalidFiles.push(
+                        `${file.name} (${(file.size / 1024 / 1024).toFixed(
+                          2
+                        )}MB)`
+                      );
+                    } else {
+                      validFiles.push(file);
+                    }
+                  });
+
+                  if (invalidFiles.length > 0) {
+                    setStatusMessage(
+                      `Some files are too large (max 5MB): ${invalidFiles.join(
+                        ", "
+                      )}`
+                    );
+                  } else {
+                    setStatusMessage(null);
+                  }
+
+                  setAdditionalImageFiles(validFiles);
+                }}
               />
             </label>
           </div>
@@ -466,27 +699,114 @@ export default function AdminPageClient() {
               <p className="text-xs text-gray-400">No file selected.</p>
             ) : (
               <div className="flex flex-wrap gap-3">
-                {existingAdditionalImages.map((url) => (
-                  <div key={url}>
-                    {renderExistingPreview(url, "Current", () => {
-                      setExistingAdditionalImages((prev) =>
-                        prev.filter((item) => item !== url)
-                      );
-                      setAdditionalImagesChanged(true);
-                    })}
-                  </div>
-                ))}
-                {additionalPreviews.map((preview) => (
-                  <div
-                    key={`${preview.file.name}-${preview.file.size}-${preview.file.lastModified}`}
-                  >
-                    {renderPreview(preview.url, preview.file.name, () =>
-                      setAdditionalImageFiles((prev) =>
-                        prev.filter((file) => file !== preview.file)
-                      )
-                    )}
-                  </div>
-                ))}
+                {existingAdditionalImages.map((url, index) => {
+                  const totalExisting = existingAdditionalImages.length;
+                  const totalPreviews = additionalPreviews.length;
+                  const totalCount = totalExisting + totalPreviews;
+                  const globalIndex = index;
+
+                  return (
+                    <div
+                      key={url}
+                      draggable
+                      onDragStart={(e) => {
+                        e.dataTransfer.setData("type", "existing");
+                        e.dataTransfer.setData("index", index.toString());
+                      }}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        e.currentTarget.classList.add("opacity-50");
+                      }}
+                      onDragLeave={(e) => {
+                        e.currentTarget.classList.remove("opacity-50");
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        e.currentTarget.classList.remove("opacity-50");
+                        const dragType = e.dataTransfer.getData("type");
+                        const dragIndex = parseInt(
+                          e.dataTransfer.getData("index")
+                        );
+
+                        if (dragType === "existing" && dragIndex !== index) {
+                          moveExistingImage(dragIndex, index);
+                        }
+                      }}
+                    >
+                      {renderExistingPreview(
+                        url,
+                        "Current",
+                        () => {
+                          setExistingAdditionalImages((prev) =>
+                            prev.filter((item) => item !== url)
+                          );
+                          setAdditionalImagesChanged(true);
+                        },
+                        index,
+                        totalCount,
+                        () => moveImageUp(index, true),
+                        () => moveImageDown(index, true),
+                        undefined,
+                        undefined,
+                        undefined,
+                        true
+                      )}
+                    </div>
+                  );
+                })}
+                {additionalPreviews.map((preview, index) => {
+                  const totalExisting = existingAdditionalImages.length;
+                  const totalPreviews = additionalPreviews.length;
+                  const totalCount = totalExisting + totalPreviews;
+                  const globalIndex = totalExisting + index;
+
+                  return (
+                    <div
+                      key={`${preview.file.name}-${preview.file.size}-${preview.file.lastModified}`}
+                      draggable
+                      onDragStart={(e) => {
+                        e.dataTransfer.setData("type", "preview");
+                        e.dataTransfer.setData("index", index.toString());
+                      }}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        e.currentTarget.classList.add("opacity-50");
+                      }}
+                      onDragLeave={(e) => {
+                        e.currentTarget.classList.remove("opacity-50");
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        e.currentTarget.classList.remove("opacity-50");
+                        const dragType = e.dataTransfer.getData("type");
+                        const dragIndex = parseInt(
+                          e.dataTransfer.getData("index")
+                        );
+
+                        if (dragType === "preview" && dragIndex !== index) {
+                          movePreviewImage(dragIndex, index);
+                        }
+                      }}
+                    >
+                      {renderPreview(
+                        preview.url,
+                        preview.file.name,
+                        () =>
+                          setAdditionalImageFiles((prev) =>
+                            prev.filter((file) => file !== preview.file)
+                          ),
+                        index,
+                        totalCount,
+                        () => moveImageUp(index, false),
+                        () => moveImageDown(index, false),
+                        undefined,
+                        undefined,
+                        undefined,
+                        true
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
