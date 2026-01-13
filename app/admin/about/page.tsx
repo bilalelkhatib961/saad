@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { LocalizedText } from "@/types/localized";
 import { AdminLogoutButton } from "@/components/admin-logout-button";
+import { Spinner } from "@/components/ui/spinner";
 
 const emptyLocalized = { en: "", fr: "" };
 
@@ -26,6 +27,7 @@ const defaultContent: AboutContent = {
 export default function AdminAboutPage() {
   const [content, setContent] = useState<AboutContent>(defaultContent);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [pdfFile, setPdfFile] = useState<File | null>(null);
@@ -87,9 +89,11 @@ export default function AdminAboutPage() {
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     setStatusMessage(null);
+    setIsSubmitting(true);
 
     if (!content.image && !imageFile) {
       setStatusMessage("Please upload an image for the About page.");
+      setIsSubmitting(false);
       return;
     }
 
@@ -145,6 +149,8 @@ export default function AdminAboutPage() {
     } catch (error) {
       console.error(error);
       setStatusMessage("Failed to update about content.");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -383,8 +389,10 @@ export default function AdminAboutPage() {
 
           <button
             type="submit"
-            className="rounded-lg bg-white px-5 py-2 text-sm font-semibold text-[#1f1f1f] transition-opacity hover:opacity-90"
+            disabled={isSubmitting}
+            className="rounded-lg bg-white px-5 py-2 text-sm font-semibold text-[#1f1f1f] transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
+            {isSubmitting && <Spinner className="size-4" />}
             Save About Content
           </button>
           {statusMessage && (

@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import type { GalleryItem } from "@/types/gallery-item";
 import { AdminLogoutButton } from "@/components/admin-logout-button";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
+import { Spinner } from "@/components/ui/spinner";
 
 const emptyLocalized = { en: "", fr: "" };
 
@@ -27,6 +28,7 @@ export default function AdminPageClient() {
     fullDescription: { ...emptyLocalized },
   });
   const [isLoadingItem, setIsLoadingItem] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -90,14 +92,17 @@ export default function AdminPageClient() {
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     setStatusMessage(null);
+    setIsSubmitting(true);
 
     if (!editingId && !mainImageFile) {
       setStatusMessage("Please upload the main image.");
+      setIsSubmitting(false);
       return;
     }
 
     if (editingId && !existingMainImage && !mainImageFile) {
       setStatusMessage("Please upload a main image.");
+      setIsSubmitting(false);
       return;
     }
 
@@ -177,6 +182,8 @@ export default function AdminPageClient() {
       setStatusMessage(
         editingId ? "Failed to update item." : "Failed to create item."
       );
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -532,21 +539,25 @@ export default function AdminPageClient() {
           )}
         </div>
 
-        <button
-          type="submit"
-          className="rounded-lg bg-white px-5 py-2 text-sm font-semibold text-[#1f1f1f] transition-opacity hover:opacity-90"
-        >
-          {editingId ? "Update Item" : "Create Item"}
-        </button>
-        {editingId && (
+        <div className="flex items-center gap-2">
           <button
-            type="button"
-            onClick={handleCancelEdit}
-            className="rounded-lg border border-gray-500 px-5 py-2 text-sm font-semibold text-gray-200 transition-colors hover:border-gray-300 hover:text-white"
+            type="submit"
+            disabled={isSubmitting}
+            className="rounded-lg bg-white px-5 py-2 text-sm font-semibold text-[#1f1f1f] transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
-            Cancel
+            {isSubmitting && <Spinner className="size-4" />}
+            {editingId ? "Update Item" : "Create Item"}
           </button>
-        )}
+          {editingId && (
+            <button
+              type="button"
+              onClick={handleCancelEdit}
+              className="rounded-lg border border-gray-500 px-5 py-2 text-sm font-semibold text-gray-200 transition-colors hover:border-gray-300 hover:text-white"
+            >
+              Cancel
+            </button>
+          )}
+        </div>
 
         {statusMessage && (
           <p className="text-sm text-gray-300">{statusMessage}</p>
