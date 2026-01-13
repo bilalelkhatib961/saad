@@ -46,7 +46,15 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error: "Request Entity Too Large",
-          details: `Upload too large for Vercel Functions (${(contentLengthNum / 1024 / 1024).toFixed(2)}MB). Maximum size is ${(MAX_PAYLOAD_SIZE / 1024 / 1024).toFixed(2)}MB.`,
+          details: `Upload too large for Vercel Functions (${(
+            contentLengthNum /
+            1024 /
+            1024
+          ).toFixed(2)}MB). Maximum size is ${(
+            MAX_PAYLOAD_SIZE /
+            1024 /
+            1024
+          ).toFixed(2)}MB.`,
           hint: "Use direct-to-Blob upload by calling /api/upload/token first, then upload directly to Vercel Blob.",
           requestId,
         },
@@ -107,14 +115,21 @@ export async function POST(request: Request) {
         fileSize,
         fileName,
         maxSize: MAX_PAYLOAD_SIZE,
-        message:
-          "File too large after extraction. Use direct-to-Blob upload.",
+        message: "File too large after extraction. Use direct-to-Blob upload.",
       });
 
       return NextResponse.json(
         {
           error: "File Too Large",
-          details: `File "${fileName}" is too large (${(fileSize / 1024 / 1024).toFixed(2)}MB). Maximum size is ${(MAX_PAYLOAD_SIZE / 1024 / 1024).toFixed(2)}MB.`,
+          details: `File "${fileName}" is too large (${(
+            fileSize /
+            1024 /
+            1024
+          ).toFixed(2)}MB). Maximum size is ${(
+            MAX_PAYLOAD_SIZE /
+            1024 /
+            1024
+          ).toFixed(2)}MB.`,
           hint: "Use direct-to-Blob upload by calling /api/upload/token first, then upload directly to Vercel Blob.",
           requestId,
         },
@@ -130,6 +145,15 @@ export async function POST(request: Request) {
     const blobToken = process.env.BLOB_READ_WRITE_TOKEN;
     const hasBlobToken = !!blobToken;
     const tokenFormatValid = blobToken?.startsWith("vercel_blob_") || false;
+
+    console.log({
+      requestId,
+      route,
+      isVercel,
+      hasBlobToken,
+      tokenFormatValid,
+      filename,
+    });
 
     logInfo("upload_environment_check", {
       requestId,
@@ -192,10 +216,7 @@ export async function POST(request: Request) {
           pathname: blob.pathname,
           fileSize,
         });
-        return NextResponse.json(
-          { url: blob.url, requestId },
-          { status: 201 }
-        );
+        return NextResponse.json({ url: blob.url, requestId }, { status: 201 });
       } catch (blobError) {
         const elapsedMs = Date.now() - startTime;
         logError("upload_blob_failed", blobError, {
@@ -235,18 +256,13 @@ export async function POST(request: Request) {
           url: blob.url,
           pathname: blob.pathname,
         });
-        return NextResponse.json(
-          { url: blob.url, requestId },
-          { status: 201 }
-        );
+        return NextResponse.json({ url: blob.url, requestId }, { status: 201 });
       } catch (blobError) {
         logWarn("upload_blob_failed_local_fallback", {
           requestId,
           route,
           error:
-            blobError instanceof Error
-              ? blobError.message
-              : String(blobError),
+            blobError instanceof Error ? blobError.message : String(blobError),
           message: "Falling back to local filesystem",
         });
         // Fall through to local storage if blob fails in development
@@ -286,10 +302,7 @@ export async function POST(request: Request) {
       fileSize,
     });
 
-    return NextResponse.json(
-      { url: publicUrl, requestId },
-      { status: 201 }
-    );
+    return NextResponse.json({ url: publicUrl, requestId }, { status: 201 });
   } catch (error) {
     const elapsedMs = Date.now() - startTime;
     logError("upload_request_error", error, {

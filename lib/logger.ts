@@ -19,10 +19,7 @@ function getEnv() {
   return process.env.VERCEL_ENV || process.env.NODE_ENV || "development";
 }
 
-function createLogEntry(
-  level: LogLevel,
-  data: LogData | ErrorLogData
-): string {
+function createLogEntry(level: LogLevel, data: LogData | ErrorLogData): string {
   const entry = {
     timestamp: new Date().toISOString(),
     level,
@@ -46,8 +43,7 @@ export function logError(
     event,
     ...data,
     error: {
-      message:
-        error instanceof Error ? error.message : String(error),
+      message: error instanceof Error ? error.message : String(error),
       stack: error instanceof Error ? error.stack : undefined,
       name: error instanceof Error ? error.name : undefined,
     },

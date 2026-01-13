@@ -7,10 +7,125 @@ import { AdminLogoutButton } from "@/components/admin-logout-button";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { Spinner } from "@/components/ui/spinner";
 import { ArrowUp, ArrowDown, GripVertical } from "lucide-react";
-import { put } from "@vercel/blob/client";
+import { upload } from "@vercel/blob/client";
 
 const emptyLocalized = { en: "", fr: "" };
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+const WEBP_QUALITY = 0.85; // Quality for WebP conversion (0-1)
+
+/**
+ * Converts an image file to WebP format to reduce file size
+ * @param file - The image file to convert
+ * @param maxWidth - Maximum width for the image (default: 1920)
+ * @param maxHeight - Maximum height for the image (default: 1920)
+ * @returns Promise<File> - The converted WebP file or original file if conversion fails
+ */
+const convertImageToWebP = async (
+  file: File,
+  maxWidth: number = 1920,
+  maxHeight: number = 1920
+): Promise<File> => {
+  // Only convert image files
+  if (!file.type.startsWith("image/")) {
+    return file;
+  }
+
+  // Skip if already WebP
+  if (file.type === "image/webp") {
+    return file;
+  }
+
+  try {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+
+      if (!ctx) {
+        console.warn(
+          "[WEBP_CONVERT] Canvas context not available, using original file"
+        );
+        resolve(file);
+        return;
+      }
+
+      img.onload = () => {
+        try {
+          // Calculate new dimensions while maintaining aspect ratio
+          let width = img.width;
+          let height = img.height;
+
+          if (width > maxWidth || height > maxHeight) {
+            const ratio = Math.min(maxWidth / width, maxHeight / height);
+            width = width * ratio;
+            height = height * ratio;
+          }
+
+          // Set canvas dimensions
+          canvas.width = width;
+          canvas.height = height;
+
+          // Draw and convert to WebP
+          ctx.drawImage(img, 0, 0, width, height);
+
+          canvas.toBlob(
+            (blob) => {
+              if (!blob) {
+                console.warn(
+                  "[WEBP_CONVERT] Failed to create blob, using original file"
+                );
+                resolve(file);
+                return;
+              }
+
+              // Create new File with WebP extension
+              const originalName = file.name.replace(/\.[^/.]+$/, "");
+              const webpFile = new File([blob], `${originalName}.webp`, {
+                type: "image/webp",
+                lastModified: Date.now(),
+              });
+
+              console.log("[WEBP_CONVERT] Conversion successful", {
+                original: {
+                  name: file.name,
+                  size: file.size,
+                  type: file.type,
+                },
+                converted: {
+                  name: webpFile.name,
+                  size: webpFile.size,
+                  type: webpFile.type,
+                  reduction: `${(
+                    ((file.size - webpFile.size) / file.size) *
+                    100
+                  ).toFixed(1)}%`,
+                },
+              });
+
+              resolve(webpFile);
+            },
+            "image/webp",
+            WEBP_QUALITY
+          );
+        } catch (error) {
+          console.error("[WEBP_CONVERT] Error during conversion", error);
+          resolve(file); // Fallback to original file
+        }
+      };
+
+      img.onerror = () => {
+        console.warn("[WEBP_CONVERT] Image load error, using original file");
+        resolve(file);
+      };
+
+      // Load image from file
+      img.src = URL.createObjectURL(file);
+    });
+  } catch (error) {
+    console.error("[WEBP_CONVERT] Conversion failed", error);
+    return file; // Fallback to original file
+  }
+};
 
 export default function AdminPageClient() {
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
@@ -115,17 +230,28 @@ export default function AdminPageClient() {
         `client-${Date.now()}-${Math.random().toString(36).substring(7)}`;
       const SMALL_FILE_THRESHOLD = 3.5 * 1024 * 1024; // 3.5MB - use old endpoint for small files
 
-      // Validate file size
-      if (file.size > MAX_FILE_SIZE) {
-        console.error("[CLIENT_UPLOAD] File too large", {
+      // Convert image to WebP before upload to reduce size
+      let fileToUpload = file;
+      if (file.type.startsWith("image/")) {
+        console.log("[CLIENT_UPLOAD] Converting image to WebP", {
           requestId: fileRequestId,
           fileName: file.name,
-          fileSize: file.size,
+          originalSize: file.size,
+        });
+        fileToUpload = await convertImageToWebP(file);
+      }
+
+      // Validate file size (after conversion)
+      if (fileToUpload.size > MAX_FILE_SIZE) {
+        console.error("[CLIENT_UPLOAD] File too large", {
+          requestId: fileRequestId,
+          fileName: fileToUpload.name,
+          fileSize: fileToUpload.size,
           maxSize: MAX_FILE_SIZE,
         });
         throw new Error(
-          `File "${file.name}" is too large (${(
-            file.size /
+          `File "${fileToUpload.name}" is too large (${(
+            fileToUpload.size /
             1024 /
             1024
           ).toFixed(2)}MB). Maximum size is 5MB.`
@@ -134,17 +260,19 @@ export default function AdminPageClient() {
 
       console.log("[CLIENT_UPLOAD] Starting upload", {
         requestId: fileRequestId,
-        fileName: file.name,
-        fileSize: file.size,
-        fileType: file.type,
-        useDirectUpload: file.size > SMALL_FILE_THRESHOLD,
+        fileName: fileToUpload.name,
+        fileSize: fileToUpload.size,
+        fileType: fileToUpload.type,
+        originalFileName:
+          file.name !== fileToUpload.name ? file.name : undefined,
+        useDirectUpload: fileToUpload.size > SMALL_FILE_THRESHOLD,
       });
 
       // For small files, use the old endpoint (faster, simpler)
-      if (file.size <= SMALL_FILE_THRESHOLD) {
+      if (fileToUpload.size <= SMALL_FILE_THRESHOLD) {
         try {
           const formData = new FormData();
-          formData.append("file", file);
+          formData.append("file", fileToUpload);
           const response = await fetch("/api/upload", {
             method: "POST",
             body: formData,
@@ -188,16 +316,15 @@ export default function AdminPageClient() {
         const sanitizeFilename = (filename: string) => {
           return filename.replace(/[^a-zA-Z0-9.-]/g, "_");
         };
-        const safeName = sanitizeFilename(file.name || "upload");
+        const safeName = sanitizeFilename(fileToUpload.name || "upload");
         const filename = `${Date.now()}-${safeName}`;
 
-        // Use @vercel/blob/client with handleUploadUrl
-        // This will automatically request a token from the server
-        // Type assertion needed as TypeScript definitions may be outdated
-        const blob = await put(filename, file, {
+        // Use @vercel/blob/client upload with handleUploadUrl
+        // This automatically requests a token from the server and handles the upload
+        const blob = await upload(filename, fileToUpload, {
           access: "public",
           handleUploadUrl: "/api/upload/token",
-        } as any);
+        });
 
         console.log("[CLIENT_UPLOAD] Blob upload successful", {
           requestId: fileRequestId,
@@ -205,39 +332,21 @@ export default function AdminPageClient() {
           pathname: blob.pathname,
         });
 
-        // Step 2: Notify completion endpoint
-        console.log("[CLIENT_UPLOAD] Notifying completion", {
-          requestId: fileRequestId,
-          url: blob.url,
-        });
-
-        const completeResponse = await fetch("/api/upload/complete", {
+        // Notify completion endpoint (non-blocking)
+        fetch("/api/upload/complete", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             url: blob.url,
             pathname: blob.pathname,
-            size: file.size,
-            contentType: file.type,
-            originalName: file.name,
+            size: fileToUpload.size,
+            contentType: fileToUpload.type,
+            originalName: fileToUpload.name,
             requestId: fileRequestId,
           }),
+        }).catch(() => {
+          // Ignore completion notification errors
         });
-
-        if (!completeResponse.ok) {
-          const errorData = await completeResponse.json().catch(() => ({}));
-          console.error("[CLIENT_UPLOAD] Completion notification failed", {
-            requestId: fileRequestId,
-            status: completeResponse.status,
-            error: errorData,
-          });
-          // Don't throw - the upload succeeded, just the notification failed
-        } else {
-          console.log("[CLIENT_UPLOAD] Upload complete", {
-            requestId: fileRequestId,
-            url: blob.url,
-          });
-        }
 
         return blob.url;
       } catch (error) {

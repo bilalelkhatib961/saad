@@ -36,16 +36,19 @@ export async function POST(request: Request) {
       );
     }
 
-    // Use handleUpload to handle the client upload request
-    // This will generate the token and handle the upload flow
-    // Type assertion needed as TypeScript definitions may have issues
+    // Use handleUpload from @vercel/blob/client to handle client uploads
+    // This generates a client token and handles the upload flow
     const response = await handleUpload({
       request,
-      body: request.body,
-      onBeforeGenerateToken: async (pathname: string) => {
+      body: request.body as any,
+      onBeforeGenerateToken: async (
+        pathname: string,
+        clientPayload?: unknown
+      ) => {
         logInfo("upload_token_generating", {
           requestId,
           pathname,
+          clientPayload,
         });
         // Allow all file types, but you can restrict this
         return {
@@ -64,8 +67,10 @@ export async function POST(request: Request) {
       },
       onUploadCompleted: async ({
         blob,
+        tokenPayload,
       }: {
         blob: { url: string; pathname: string };
+        tokenPayload?: unknown;
       }) => {
         logInfo("upload_token_completed", {
           requestId,
