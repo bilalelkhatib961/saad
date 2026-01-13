@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { handleUpload } from "@vercel/blob/client";
 import { logInfo, logError } from "@/lib/logger";
 import crypto from "crypto";
 
@@ -35,28 +36,54 @@ export async function POST(request: Request) {
       );
     }
 
-    // Return the token for client-side direct upload
-    // Note: In production, consider implementing time-limited tokens or
-    // IP restrictions for enhanced security
-    // For now, we return the token as it's needed for @vercel/blob/client put()
-    const elapsedMs = Date.now() - startTime;
+    // Use handleUpload to handle the client upload request
+    // This will generate the token and handle the upload flow
+    // Type assertion needed as TypeScript definitions may have issues
+    const response = await handleUpload({
+      request,
+      body: request.body,
+      onBeforeGenerateToken: async (pathname: string) => {
+        logInfo("upload_token_generating", {
+          requestId,
+          pathname,
+        });
+        // Allow all file types, but you can restrict this
+        return {
+          allowedContentTypes: [
+            "image/jpeg",
+            "image/jpg",
+            "image/png",
+            "image/gif",
+            "image/webp",
+            "video/mp4",
+            "video/webm",
+            "application/pdf",
+          ],
+          addRandomSuffix: true,
+        };
+      },
+      onUploadCompleted: async ({
+        blob,
+      }: {
+        blob: { url: string; pathname: string };
+      }) => {
+        logInfo("upload_token_completed", {
+          requestId,
+          url: blob.url,
+          pathname: blob.pathname,
+        });
+      },
+    } as any);
 
+    const elapsedMs = Date.now() - startTime;
     logInfo("upload_token_success", {
       requestId,
       route,
       elapsedMs,
-      tokenConfigured: !!blobToken,
-      message: "Token provided for client upload",
+      message: "Client upload handled successfully",
     });
 
-    // Return token for client-side use with @vercel/blob/client
-    return NextResponse.json(
-      {
-        token: blobToken,
-        requestId,
-      },
-      { status: 200 }
-    );
+    return response;
   } catch (error) {
     const elapsedMs = Date.now() - startTime;
     logError("upload_token_error", error, {
@@ -67,7 +94,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json(
       {
-        error: "Failed to generate upload token",
+        error: "Failed to handle upload",
         details: error instanceof Error ? error.message : String(error),
         requestId,
       },

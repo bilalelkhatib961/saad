@@ -179,36 +179,8 @@ export default function AdminPageClient() {
 
       // For large files, use direct-to-Blob upload
       try {
-        // Step 1: Get upload token
-        console.log("[CLIENT_UPLOAD] Requesting token for large file", {
-          requestId: fileRequestId,
-        });
-        const tokenResponse = await fetch("/api/upload/token", {
-          method: "POST",
-        });
-
-        if (!tokenResponse.ok) {
-          const errorData = await tokenResponse.json().catch(() => ({}));
-          console.error("[CLIENT_UPLOAD] Token request failed", {
-            requestId: fileRequestId,
-            status: tokenResponse.status,
-            error: errorData,
-          });
-          throw new Error(
-            errorData.details || errorData.error || "Failed to get upload token"
-          );
-        }
-
-        const tokenData = await tokenResponse.json();
-        const finalRequestId = tokenData.requestId || fileRequestId;
-
-        console.log("[CLIENT_UPLOAD] Token received", {
-          requestId: finalRequestId,
-        });
-
-        // Step 2: Upload directly to Vercel Blob using client SDK
         console.log("[CLIENT_UPLOAD] Uploading to Blob", {
-          requestId: finalRequestId,
+          requestId: fileRequestId,
           fileName: file.name,
           fileSize: file.size,
         });
@@ -219,21 +191,23 @@ export default function AdminPageClient() {
         const safeName = sanitizeFilename(file.name || "upload");
         const filename = `${Date.now()}-${safeName}`;
 
-        // Use @vercel/blob/client with token
+        // Use @vercel/blob/client with handleUploadUrl
+        // This will automatically request a token from the server
+        // Type assertion needed as TypeScript definitions may be outdated
         const blob = await put(filename, file, {
           access: "public",
-          token: tokenData.token,
-        });
+          handleUploadUrl: "/api/upload/token",
+        } as any);
 
         console.log("[CLIENT_UPLOAD] Blob upload successful", {
-          requestId: finalRequestId,
+          requestId: fileRequestId,
           url: blob.url,
           pathname: blob.pathname,
         });
 
-        // Step 3: Notify completion endpoint
+        // Step 2: Notify completion endpoint
         console.log("[CLIENT_UPLOAD] Notifying completion", {
-          requestId: finalRequestId,
+          requestId: fileRequestId,
           url: blob.url,
         });
 
@@ -246,21 +220,21 @@ export default function AdminPageClient() {
             size: file.size,
             contentType: file.type,
             originalName: file.name,
-            requestId: finalRequestId,
+            requestId: fileRequestId,
           }),
         });
 
         if (!completeResponse.ok) {
           const errorData = await completeResponse.json().catch(() => ({}));
           console.error("[CLIENT_UPLOAD] Completion notification failed", {
-            requestId: finalRequestId,
+            requestId: fileRequestId,
             status: completeResponse.status,
             error: errorData,
           });
           // Don't throw - the upload succeeded, just the notification failed
         } else {
           console.log("[CLIENT_UPLOAD] Upload complete", {
-            requestId: finalRequestId,
+            requestId: fileRequestId,
             url: blob.url,
           });
         }
