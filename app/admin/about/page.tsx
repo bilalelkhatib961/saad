@@ -5,8 +5,11 @@ import { useRouter } from "next/navigation";
 import type { LocalizedText } from "@/types/localized";
 import { AdminLogoutButton } from "@/components/admin-logout-button";
 import { Spinner } from "@/components/ui/spinner";
+import { put } from "@vercel/blob/client";
 
 const emptyLocalized = { en: "", fr: "" };
+const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+const SMALL_FILE_THRESHOLD = 3.5 * 1024 * 1024; // 3.5MB
 
 type AboutContent = {
   title: LocalizedText;
@@ -100,36 +103,95 @@ export default function AdminAboutPage() {
     try {
       let imageUrl = content.image;
       let pdfUrl = content.pdfLink;
-      if (imageFile) {
-        const formData = new FormData();
-        formData.append("file", imageFile);
-        const uploadResponse = await fetch("/api/upload", {
-          method: "POST",
-          body: formData,
-        });
+      const uploadFile = async (file: File) => {
+        const requestId = `about-${Date.now()}-${Math.random()
+          .toString(36)
+          .substring(7)}`;
 
-        if (!uploadResponse.ok) {
-          throw new Error("Failed to upload image");
+        if (file.size > MAX_FILE_SIZE) {
+          throw new Error(
+            `File "${file.name}" is too large (${(
+              file.size /
+              1024 /
+              1024
+            ).toFixed(2)}MB). Maximum size is 5MB.`
+          );
         }
 
-        const uploaded: { url: string } = await uploadResponse.json();
-        imageUrl = uploaded.url;
+        console.log("[ABOUT_UPLOAD] Starting upload", {
+          requestId,
+          fileName: file.name,
+          fileSize: file.size,
+          useDirectUpload: file.size > SMALL_FILE_THRESHOLD,
+        });
+
+        // For small files, use the old endpoint
+        if (file.size <= SMALL_FILE_THRESHOLD) {
+          const formData = new FormData();
+          formData.append("file", file);
+          const response = await fetch("/api/upload", {
+            method: "POST",
+            body: formData,
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(
+              errorData.details || errorData.error || "Upload failed"
+            );
+          }
+
+          const data = await response.json();
+          return data.url;
+        }
+
+        // For large files, use direct-to-Blob upload
+        const tokenResponse = await fetch("/api/upload/token", {
+          method: "POST",
+        });
+
+        if (!tokenResponse.ok) {
+          const errorData = await tokenResponse.json().catch(() => ({}));
+          throw new Error(
+            errorData.details || errorData.error || "Failed to get upload token"
+          );
+        }
+
+        const tokenData = await tokenResponse.json();
+        const sanitizeFilename = (filename: string) => {
+          return filename.replace(/[^a-zA-Z0-9.-]/g, "_");
+        };
+        const safeName = sanitizeFilename(file.name || "upload");
+        const filename = `${Date.now()}-${safeName}`;
+
+        const blob = await put(filename, file, {
+          access: "public",
+          token: tokenData.token,
+        });
+
+        // Notify completion (non-blocking)
+        fetch("/api/upload/complete", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            url: blob.url,
+            pathname: blob.pathname,
+            size: file.size,
+            contentType: file.type,
+            originalName: file.name,
+            requestId: tokenData.requestId || requestId,
+          }),
+        }).catch(() => {});
+
+        return blob.url;
+      };
+
+      if (imageFile) {
+        imageUrl = await uploadFile(imageFile);
       }
 
       if (pdfFile) {
-        const pdfData = new FormData();
-        pdfData.append("file", pdfFile);
-        const uploadResponse = await fetch("/api/upload", {
-          method: "POST",
-          body: pdfData,
-        });
-
-        if (!uploadResponse.ok) {
-          throw new Error("Failed to upload PDF");
-        }
-
-        const uploaded: { url: string } = await uploadResponse.json();
-        pdfUrl = uploaded.url;
+        pdfUrl = await uploadFile(pdfFile);
       }
 
       const response = await fetch("/api/about", {

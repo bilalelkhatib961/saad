@@ -7,6 +7,7 @@ import { AdminLogoutButton } from "@/components/admin-logout-button";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { Spinner } from "@/components/ui/spinner";
 import { ArrowUp, ArrowDown, GripVertical } from "lucide-react";
+import { put } from "@vercel/blob/client";
 
 const emptyLocalized = { en: "", fr: "" };
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
@@ -108,9 +109,20 @@ export default function AdminPageClient() {
       return;
     }
 
-    const uploadFile = async (file: File) => {
+    const uploadFile = async (file: File, requestId?: string) => {
+      const fileRequestId =
+        requestId ||
+        `client-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+      const SMALL_FILE_THRESHOLD = 3.5 * 1024 * 1024; // 3.5MB - use old endpoint for small files
+
       // Validate file size
       if (file.size > MAX_FILE_SIZE) {
+        console.error("[CLIENT_UPLOAD] File too large", {
+          requestId: fileRequestId,
+          fileName: file.name,
+          fileSize: file.size,
+          maxSize: MAX_FILE_SIZE,
+        });
         throw new Error(
           `File "${file.name}" is too large (${(
             file.size /
@@ -120,22 +132,148 @@ export default function AdminPageClient() {
         );
       }
 
-      const formData = new FormData();
-      formData.append("file", file);
-      const response = await fetch("/api/upload", {
-        method: "POST",
-        body: formData,
+      console.log("[CLIENT_UPLOAD] Starting upload", {
+        requestId: fileRequestId,
+        fileName: file.name,
+        fileSize: file.size,
+        fileType: file.type,
+        useDirectUpload: file.size > SMALL_FILE_THRESHOLD,
       });
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(
-          errorData.details || errorData.error || "Upload failed"
-        );
+      // For small files, use the old endpoint (faster, simpler)
+      if (file.size <= SMALL_FILE_THRESHOLD) {
+        try {
+          const formData = new FormData();
+          formData.append("file", file);
+          const response = await fetch("/api/upload", {
+            method: "POST",
+            body: formData,
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            console.error("[CLIENT_UPLOAD] Small file upload failed", {
+              requestId: fileRequestId,
+              status: response.status,
+              error: errorData,
+            });
+            throw new Error(
+              errorData.details || errorData.error || "Upload failed"
+            );
+          }
+
+          const data = await response.json();
+          console.log("[CLIENT_UPLOAD] Small file upload successful", {
+            requestId: fileRequestId,
+            url: data.url,
+          });
+          return data.url;
+        } catch (error) {
+          console.error("[CLIENT_UPLOAD] Small file upload error", {
+            requestId: fileRequestId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+          throw error;
+        }
       }
 
-      const data: { url: string } = await response.json();
-      return data.url;
+      // For large files, use direct-to-Blob upload
+      try {
+        // Step 1: Get upload token
+        console.log("[CLIENT_UPLOAD] Requesting token for large file", {
+          requestId: fileRequestId,
+        });
+        const tokenResponse = await fetch("/api/upload/token", {
+          method: "POST",
+        });
+
+        if (!tokenResponse.ok) {
+          const errorData = await tokenResponse.json().catch(() => ({}));
+          console.error("[CLIENT_UPLOAD] Token request failed", {
+            requestId: fileRequestId,
+            status: tokenResponse.status,
+            error: errorData,
+          });
+          throw new Error(
+            errorData.details || errorData.error || "Failed to get upload token"
+          );
+        }
+
+        const tokenData = await tokenResponse.json();
+        const finalRequestId = tokenData.requestId || fileRequestId;
+
+        console.log("[CLIENT_UPLOAD] Token received", {
+          requestId: finalRequestId,
+        });
+
+        // Step 2: Upload directly to Vercel Blob using client SDK
+        console.log("[CLIENT_UPLOAD] Uploading to Blob", {
+          requestId: finalRequestId,
+          fileName: file.name,
+          fileSize: file.size,
+        });
+
+        const sanitizeFilename = (filename: string) => {
+          return filename.replace(/[^a-zA-Z0-9.-]/g, "_");
+        };
+        const safeName = sanitizeFilename(file.name || "upload");
+        const filename = `${Date.now()}-${safeName}`;
+
+        // Use @vercel/blob/client with token
+        const blob = await put(filename, file, {
+          access: "public",
+          token: tokenData.token,
+        });
+
+        console.log("[CLIENT_UPLOAD] Blob upload successful", {
+          requestId: finalRequestId,
+          url: blob.url,
+          pathname: blob.pathname,
+        });
+
+        // Step 3: Notify completion endpoint
+        console.log("[CLIENT_UPLOAD] Notifying completion", {
+          requestId: finalRequestId,
+          url: blob.url,
+        });
+
+        const completeResponse = await fetch("/api/upload/complete", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            url: blob.url,
+            pathname: blob.pathname,
+            size: file.size,
+            contentType: file.type,
+            originalName: file.name,
+            requestId: finalRequestId,
+          }),
+        });
+
+        if (!completeResponse.ok) {
+          const errorData = await completeResponse.json().catch(() => ({}));
+          console.error("[CLIENT_UPLOAD] Completion notification failed", {
+            requestId: finalRequestId,
+            status: completeResponse.status,
+            error: errorData,
+          });
+          // Don't throw - the upload succeeded, just the notification failed
+        } else {
+          console.log("[CLIENT_UPLOAD] Upload complete", {
+            requestId: finalRequestId,
+            url: blob.url,
+          });
+        }
+
+        return blob.url;
+      } catch (error) {
+        console.error("[CLIENT_UPLOAD] Large file upload failed", {
+          requestId: fileRequestId,
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+        });
+        throw error;
+      }
     };
 
     const payload: Partial<GalleryItem> = {
