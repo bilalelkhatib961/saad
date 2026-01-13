@@ -175,7 +175,7 @@ export default function AdminPageClient() {
         editingId ? "Item updated successfully." : "Item created successfully."
       );
       if (editingId) {
-        router.push("/admin");
+        router.push("/admin/items");
       }
     } catch (error) {
       console.error(error);
@@ -201,7 +201,7 @@ export default function AdminPageClient() {
     setVideoLinks([]);
     setAdditionalImagesChanged(false);
     setStatusMessage(null);
-    router.push("/admin");
+    router.push("/admin/items");
   };
 
   const updateVideoLink = (index: number, value: string) => {
