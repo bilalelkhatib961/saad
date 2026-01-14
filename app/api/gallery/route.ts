@@ -20,7 +20,10 @@ const galleryItemSchema = z.object({
 export async function GET() {
   try {
     await connectToDatabase();
-    const items = await GalleryItemModel.find().sort({ createdAt: -1 });
+    const items = await GalleryItemModel.find().sort({
+      order: 1,
+      createdAt: -1,
+    });
     return NextResponse.json(items);
   } catch (error) {
     console.error("Failed to fetch gallery items", error);
@@ -44,7 +47,18 @@ export async function POST(request: Request) {
     }
 
     await connectToDatabase();
-    const created = await GalleryItemModel.create(parsed.data);
+
+    // Set order to be the highest order + 1, or 0 if no items exist
+    const maxOrderItem = await GalleryItemModel.findOne()
+      .sort({ order: -1 })
+      .select("order");
+    const newOrder =
+      maxOrderItem?.order !== undefined ? maxOrderItem.order + 1 : 0;
+
+    const created = await GalleryItemModel.create({
+      ...parsed.data,
+      order: newOrder,
+    });
 
     return NextResponse.json(created, { status: 201 });
   } catch (error) {

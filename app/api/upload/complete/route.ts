@@ -34,7 +34,11 @@ export async function POST(request: Request) {
       logError(
         "upload_complete_validation_error",
         new Error("Missing required field: url"),
-        { requestId: incomingRequestId, route, body: { ...body, url: undefined } }
+        {
+          requestId: incomingRequestId,
+          route,
+          body: { ...body, url: undefined },
+        }
       );
       return NextResponse.json(
         {

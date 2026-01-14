@@ -15,6 +15,7 @@ Vercel Serverless Functions have a hard limit of ~4.5MB for request body size. W
 The system uses a **hybrid approach** for optimal performance:
 
 1. **Small Files (≤ 3.5MB)**: Upload through `/api/upload` endpoint
+
    - Faster for small files
    - Simpler flow
    - No token exchange needed
@@ -35,17 +36,20 @@ Client → /api/upload/token → Get token
 ## New Endpoints
 
 ### `/api/upload/token` (POST)
+
 - Returns a token for client-side direct upload
 - Validates Blob storage is configured
 - Returns `{ token, requestId }`
 
 ### `/api/upload/complete` (POST)
+
 - Receives upload completion notification
 - Accepts: `{ url, pathname, size, contentType, originalName, requestId }`
 - Returns: `{ ok: true, file: {...}, requestId }`
 - Currently just validates; can be extended to save to DB
 
 ### `/api/upload` (POST) - Updated
+
 - **Guarded**: Rejects files > 3.5MB immediately with 413 error
 - **Logging**: Comprehensive structured JSON logs
 - **Fallback**: Still works for small files in development/production
@@ -61,6 +65,7 @@ All endpoints use structured JSON logging via `lib/logger.ts`:
 - **Performance**: Elapsed time tracking
 
 ### Log Format
+
 ```json
 {
   "timestamp": "2024-01-01T00:00:00.000Z",
@@ -77,16 +82,19 @@ All endpoints use structured JSON logging via `lib/logger.ts`:
 ## Environment Variables
 
 Required:
+
 - `BLOB_READ_WRITE_TOKEN`: Vercel Blob Storage token (automatically set when Blob store is created)
 
 Optional:
+
 - `NEXT_PUBLIC_APP_URL`: App URL for callbacks (defaults to request origin)
 
 ## Security Considerations
 
-⚠️ **Note**: The current implementation returns the `BLOB_READ_WRITE_TOKEN` to the client for direct uploads. 
+⚠️ **Note**: The current implementation returns the `BLOB_READ_WRITE_TOKEN` to the client for direct uploads.
 
 **Recommendations for production**:
+
 1. Implement time-limited upload tokens
 2. Add IP restrictions
 3. Consider using signed URLs instead
@@ -95,12 +103,14 @@ Optional:
 ## Testing Checklist
 
 ### Local Development
+
 - [ ] Small file upload (< 3.5MB) works through `/api/upload`
 - [ ] Large file upload (> 3.5MB) uses direct-to-Blob flow
 - [ ] Logs appear in console with requestId
 - [ ] Error messages are clear and helpful
 
 ### Production (Vercel)
+
 - [ ] Small file upload works
 - [ ] Large file upload works (no 413 errors)
 - [ ] Logs appear in Vercel function logs with requestId
@@ -108,6 +118,7 @@ Optional:
 - [ ] No `FUNCTION_PAYLOAD_TOO_LARGE` errors
 
 ### Edge Cases
+
 - [ ] File > 5MB shows validation error before upload
 - [ ] Missing token shows helpful error message
 - [ ] Network errors are handled gracefully

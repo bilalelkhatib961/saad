@@ -17,6 +17,7 @@ const GalleryItemSchema = new Schema<GalleryItem>(
     mainImage: { type: String, required: true },
     additionalImages: { type: [String], default: [] },
     videos: { type: [String], default: [] },
+    order: { type: Number, default: 0 },
   },
   { timestamps: true }
 );

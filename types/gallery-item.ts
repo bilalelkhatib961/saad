@@ -9,6 +9,7 @@ export type GalleryItem = {
   mainImage: string;
   additionalImages: string[];
   videos?: string[];
+  order?: number;
   createdAt?: string;
   updatedAt?: string;
 };
